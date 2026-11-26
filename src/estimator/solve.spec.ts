@@ -20,7 +20,47 @@ function fakeEstimate(reductionOf: (value: number) => string) {
   }
 }
 
+const wasteRequest = {
+  id: 'dechets_mode_de_traitement',
+  territory: { level: 'region', code: '84' },
+  parameters: { storageToMaterialRecoveryFraction: '0.4', incinerationToMaterialRecoveryFraction: '0.1' },
+}
+
+function wasteWith(storageToIncinerationFraction: string) {
+  return {
+    ...wasteRequest,
+    parameters: { ...wasteRequest.parameters, storageToIncinerationFraction },
+  }
+}
+
 describe('solve', () => {
+  describe('avec des fractions liées', () => {
+    it('cherche dans la place que laissent les autres paramètres', () => {
+      const known = estimate(wasteWith('0.3'))._unsafeUnwrap().reduction
+
+      const solution = solve(wasteRequest, 'storageToIncinerationFraction', known)._unsafeUnwrap()
+
+      expect(solution.value).toBe('0.3')
+      expect(solution.estimate.reduction).toBe(known)
+    })
+
+    it('renvoie la réduction au maximum admis quand la cible est plus haute', () => {
+      const atMaximum = estimate(wasteWith('0.6'))._unsafeUnwrap().reduction
+
+      const failure = solve(wasteRequest, 'storageToIncinerationFraction', '99999999')._unsafeUnwrapErr()
+
+      expect(failure).toMatchObject({ kind: 'unreachable_target', maxReduction: atMaximum })
+    })
+
+    it('atteint la réduction du maximum admis', () => {
+      const atMaximum = estimate(wasteWith('0.6'))._unsafeUnwrap().reduction
+
+      const solution = solve(wasteRequest, 'storageToIncinerationFraction', atMaximum)._unsafeUnwrap()
+
+      expect(solution.value).toBe('0.6')
+    })
+  })
+
   it('trouve le nombre de kilomètres de haies qui évite une réduction donnée', () => {
     const solution = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '117')._unsafeUnwrap()
 
@@ -168,6 +208,26 @@ describe('solve', () => {
       })
 
       expect(failingAboveOne(request, 'x', '5')._unsafeUnwrapErr().kind).toBe('missing_data')
+    })
+
+    it('cherche sous la borne qu’impose un autre paramètre', () => {
+      const sharingTheUnit = createSolver((request) => {
+        const { x } = (request as { parameters: { x: string } }).parameters
+        return Number(x) > 0.6
+          ? err({
+              kind: 'invalid_request',
+              issues: [{ parameter: 'parameters.y', code: 'invalid_combination', message: 'must be at most 1' }],
+            } as const)
+          : ok({ reduction: String(Math.round(Number(x) * 1000) / 100) } as Estimate)
+      })
+
+      expect(sharingTheUnit(request, 'x', '5')._unsafeUnwrap().value).toBe('0.5')
+      expect(sharingTheUnit(request, 'x', '7')._unsafeUnwrapErr()).toEqual({
+        kind: 'unreachable_target',
+        parameter: 'x',
+        minReduction: '0',
+        maxReduction: '6',
+      })
     })
 
     it('refuse une cible en dessous de la réduction de base', () => {

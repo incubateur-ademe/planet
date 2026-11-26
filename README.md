@@ -86,10 +86,10 @@ const result = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '
 `solve(request, parameter, targetReduction)` cherche la valeur de `parameter` qui évite `targetReduction` tCO2e par an, les autres paramètres de la requête restant fixés. `result.value.value` vaut `'100'` et `result.value.estimate` est l'`Estimate` à cette valeur : sa `reduction` est la cible, arrondie à deux décimales. La valeur renvoyée est la plus courte (jusqu'à douze décimales) qui redonne la cible. La valeur déjà saisie pour `parameter` est ignorée.
 
 - Les paramètres cherchables d'un levier sont `solvableParameters` dans `LEVERS_CATALOG`. Les paramètres imbriqués (`elevage_durable`) et ceux dont la réduction baisse quand ils augmentent n'y sont pas.
-- Une cible hors d'atteinte donne `{ kind: 'unreachable_target', parameter, minReduction, maxReduction }` : `minReduction` est la réduction à 0, `maxReduction` la plus haute atteinte, au maximum du paramètre (1 pour une fraction). Si les autres paramètres ne laissent pas la place à 1 (fractions liées d'un report modal ou des déchets), la requête échoue en `invalid_request` (`invalid_combination`).
+- Une cible hors d'atteinte donne `{ kind: 'unreachable_target', parameter, minReduction, maxReduction }` : `minReduction` est la réduction à 0, `maxReduction` celle de la plus grande valeur que l'estimateur accepte (1 pour une fraction, moins quand les autres paramètres laissent moins de place : fractions liées d'un report modal ou des déchets).
 - Une réduction qui baisse avec le paramètre, ou qui saute la cible, donne `{ kind: 'non_monotonic_parameter', parameter }`. La croissance n'est vérifiée qu'entre 0 et 1.
 - Une cible négative, qui n'est pas un décimal ou qui n'est ni un texte ni un nombre est une `invalid_request` dont l'issue porte `targetReduction`.
-- `solve` rappelle `estimate` jusqu'à 200 fois : à réserver à un affichage ou à une recherche ponctuelle, pas à une boucle sur tous les territoires.
+- `solve` rappelle `estimate` jusqu'à 300 fois : à réserver à un affichage ou à une recherche ponctuelle, pas à une boucle sur tous les territoires.
 
 ## Règles de la requête
 

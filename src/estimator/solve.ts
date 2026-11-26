@@ -40,6 +40,9 @@ const MAX_UPPER_VALUE_DOUBLINGS = toBig('60')
 // Source : choix de conception, non validé : 2^-100 sous la précision de calcul, une réduction qui n'atteint jamais la cible saute
 const MAX_BISECTIONS = toBig('100')
 
+// Source : choix de conception, non validé : 2^-60 sous toute précision utile, le maximum admis d'un paramètre est cherché à cette finesse
+const MAX_VALIDITY_BISECTIONS = toBig('60')
+
 // Source : choix de conception, non validé : milieu d'un intervalle
 const MIDPOINT_RATIO = toBig('0.5')
 
@@ -48,9 +51,6 @@ const SHORTEST_VALUE_PLACES_COUNT = 13
 
 // Source : choix de conception, non validé : les nombres de décimales essayés, de 0 à 12
 const SHORTEST_VALUE_DECIMAL_PLACES = Array.from({ length: SHORTEST_VALUE_PLACES_COUNT }, (_, places) => places)
-
-// Source : choix de conception, non validé : préfixe des issues d'un paramètre de levier, comme produit par parse-request.ts
-const PARAMETERS_PATH = 'parameters.'
 
 // Source : choix de conception, non validé : nom du paramètre d'objectif dans les issues d'une requête invalide
 const TARGET_PARAMETER = 'targetReduction'
@@ -77,11 +77,8 @@ function parseTarget(targetReduction: unknown): Result<string, SolveError> {
   return ok(target.toFixed())
 }
 
-function isOutOfRange(error: SolveError, parameter: string): boolean {
-  return (
-    error.kind === 'invalid_request' &&
-    error.issues.some((issue) => issue.parameter === `${PARAMETERS_PATH}${parameter}` && issue.code === 'out_of_range')
-  )
+function isInvalidRequest(error: SolveError): boolean {
+  return error.kind === 'invalid_request'
 }
 
 function createSolver(estimate: EstimateUntrustedRequest): Solver {
@@ -91,6 +88,36 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
       estimate: result,
       reduction: toBig(result.reduction),
     }))
+  }
+
+  function largestValidValue(
+    request: unknown,
+    parameter: string,
+    valid: Probe,
+    invalidValue: BigNumber,
+    remaining: BigNumber,
+  ): Probe {
+    if (remaining.isZero()) return valid
+    const sumOfBounds = valid.value.plus(invalidValue)
+    const middle = sumOfBounds.times(MIDPOINT_RATIO)
+    const nextRemaining = remaining.minus(FIRST_UPPER_VALUE)
+    return probe(request, parameter, middle).match(
+      (found) => largestValidValue(request, parameter, found, invalidValue, nextRemaining),
+      () => largestValidValue(request, parameter, valid, middle, nextRemaining),
+    )
+  }
+
+  function probeOrLargestValid(
+    request: unknown,
+    parameter: string,
+    valid: Probe,
+    value: BigNumber,
+  ): Result<Probe, SolveError> {
+    return probe(request, parameter, value).orElse((error) =>
+      isInvalidRequest(error)
+        ? ok(largestValidValue(request, parameter, valid, value, MAX_VALIDITY_BISECTIONS))
+        : err(error),
+    )
   }
 
   function unreachable(parameter: string, lowest: Probe, highest: Probe): SolveError {
@@ -150,17 +177,17 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
     if (high.reduction.isGreaterThanOrEqualTo(target)) return ok({ low, high })
     if (remaining.isZero()) return err(unreachable(parameter, base, high))
     const nextValue = high.value.times(UPPER_VALUE_GROWTH)
-    return probe(request, parameter, nextValue)
-      .orElse((error) => (isOutOfRange(error, parameter) ? err(unreachable(parameter, base, high)) : err(error)))
-      .andThen((next) =>
-        raiseUpperBound(request, parameter, base, { low: high, high: next }, target, remaining.minus(FIRST_UPPER_VALUE)),
-      )
+    return probeOrLargestValid(request, parameter, high, nextValue).andThen((next) =>
+      next.value.isEqualTo(high.value)
+        ? err(unreachable(parameter, base, high))
+        : raiseUpperBound(request, parameter, base, { low: high, high: next }, target, remaining.minus(FIRST_UPPER_VALUE)),
+    )
   }
 
   return (request, parameter, targetReduction) =>
     parseTarget(targetReduction).andThen((target) =>
       probe(request, parameter, BASE_VALUE).andThen((base) =>
-        probe(request, parameter, FIRST_UPPER_VALUE).andThen((first) => {
+        probeOrLargestValid(request, parameter, base, FIRST_UPPER_VALUE).andThen((first) => {
           if (first.reduction.isLessThan(base.reduction)) return err(nonMonotonic(parameter))
           if (base.estimate.reduction === target) return ok(toSolution(parameter, base))
           if (base.reduction.isGreaterThan(target)) return err(unreachable(parameter, base, first))
