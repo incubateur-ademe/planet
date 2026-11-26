@@ -73,22 +73,32 @@ const result = estimate({ id: 'haies', parameters: { hedgeKmCreatedPerYear: 'abc
 
 `result.error` vaut `{ kind: 'invalid_request', issues: [{ parameter: 'parameters.hedgeKmCreatedPerYear', message: 'must be a decimal number' }] }`.
 
-### Trouver la valeur d'un paramètre
+### Combien faut-il de km de haies pour éviter 117 tCO2e ?
+
+`solve` fait le trajet inverse de `estimate` : en entrée une quantité de CO2e à éviter, en sortie la valeur d'un paramètre du levier.
 
 ```ts
 import { createDefaultEstimator, createSolver } from 'ademe-planet'
 
 const solve = createSolver(createDefaultEstimator())
 
-const result = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '117')
+const result = solve({
+  request: { id: 'haies', parameters: {} },
+  solveFor: 'hedgeKmCreatedPerYear',
+  targetReductionTco2e: '117',
+})
 ```
 
-`solve(request, parameter, targetReduction)` cherche la valeur de `parameter` qui évite `targetReduction` tCO2e par an, les autres paramètres de la requête restant fixés. `result.value.value` vaut `'100'` et `result.value.estimate` est l'`Estimate` à cette valeur : sa `reduction` est la cible, arrondie à deux décimales. La valeur renvoyée est la plus courte (jusqu'à douze décimales) qui redonne la cible. La valeur déjà saisie pour `parameter` est ignorée.
+- `targetReductionTco2e` : les tCO2e par an à éviter, en texte décimal ou en nombre, au plus deux décimales utiles.
+- `solveFor` : le paramètre du levier à trouver, l'inconnue. Les autres paramètres de `request` restent fixés ; la valeur déjà saisie pour `solveFor` est ignorée.
+- `request` : le levier, le territoire s'il en faut un, et les autres paramètres.
 
-- Les paramètres cherchables d'un levier sont `solvableParameters` dans `LEVERS_CATALOG`. Un paramètre imbriqué s'écrit en chemin pointé : `solve(requête, 'animals.dairyCows.headcountReductionFraction', '5000')` pour `elevage_durable`, dont la requête doit déjà contenir l'espèce et ses `targetManureShares`. Les parts de lisier, la baisse entérique des volailles et les paramètres dont la réduction baisse quand ils augmentent n'y sont pas.
-- Une cible hors d'atteinte donne `{ kind: 'unreachable_target', parameter, minReduction, maxReduction }` : `minReduction` est la réduction à 0, `maxReduction` celle de la plus grande valeur que l'estimateur accepte (1 pour une fraction, moins quand les autres paramètres laissent moins de place : fractions liées d'un report modal ou des déchets).
-- Une réduction qui baisse avec le paramètre, ou qui saute la cible, donne `{ kind: 'non_monotonic_parameter', parameter }`. La croissance n'est vérifiée qu'entre 0 et 1.
-- Une cible négative, qui n'est pas un décimal ou qui n'est ni un texte ni un nombre est une `invalid_request` dont l'issue porte `targetReduction`.
+`result.value.value` vaut `'100'` (km par an) et `result.value.estimate` est l'`Estimate` à cette valeur : sa `reduction` est la cible, arrondie à deux décimales. La valeur renvoyée est la plus courte (jusqu'à douze décimales) qui redonne la cible.
+
+- Les paramètres cherchables d'un levier sont `solvableParameters` dans `LEVERS_CATALOG`. Un paramètre imbriqué s'écrit en chemin pointé : `solveFor: 'animals.dairyCows.headcountReductionFraction'` pour `elevage_durable`, dont la requête doit déjà contenir l'espèce et ses `targetManureShares`. Les parts de lisier, la baisse entérique des volailles et les paramètres dont la réduction baisse quand ils augmentent n'y sont pas.
+- Une cible hors d'atteinte donne `{ kind: 'unreachable_target', solveFor, minReduction, maxReduction }` : `minReduction` est la réduction à 0, `maxReduction` celle de la plus grande valeur que l'estimateur accepte (1 pour une fraction, moins quand les autres paramètres laissent moins de place : fractions liées d'un report modal ou des déchets).
+- Une réduction qui baisse avec le paramètre, ou qui saute la cible, donne `{ kind: 'non_monotonic_parameter', solveFor }`. La croissance n'est vérifiée qu'entre 0 et 1.
+- Une cible négative, qui n'est pas un décimal ou qui n'est ni un texte ni un nombre est une `invalid_request` dont l'issue porte `targetReductionTco2e`.
 - `solve` rappelle `estimate` jusqu'à 300 fois : à réserver à un affichage ou à une recherche ponctuelle, pas à une boucle sur tous les territoires.
 
 ## Règles de la requête

@@ -58,9 +58,9 @@ describe('solve', () => {
     it('cherche la feuille désignée par le chemin', () => {
       const known = estimate(livestockWith('0.5'))._unsafeUnwrap().reduction
 
-      const solution = solve(livestockRequest, path, known)._unsafeUnwrap()
+      const solution = solve({ request: livestockRequest, solveFor: path, targetReductionTco2e: known })._unsafeUnwrap()
 
-      expect(solution.parameter).toBe(path)
+      expect(solution.solveFor).toBe(path)
       expect(solution.value).toBe('0.5')
       expect(solution.estimate.reduction).toBe(known)
     })
@@ -74,13 +74,13 @@ describe('solve', () => {
       }
       const known = estimate(withEnteric)._unsafeUnwrap().reduction
 
-      const solution = solve(livestockRequest, 'animals.dairyCows.entericEmissionReductionFraction', known)._unsafeUnwrap()
+      const solution = solve({ request: livestockRequest, solveFor: 'animals.dairyCows.entericEmissionReductionFraction', targetReductionTco2e: known })._unsafeUnwrap()
 
       expect(solution.value).toBe('0.2')
     })
 
     it('remonte l’erreur de l’estimateur quand l’animal n’est pas dans la requête', () => {
-      const failure = solve(livestockRequest, 'animals.sheep.headcountReductionFraction', '1')._unsafeUnwrapErr()
+      const failure = solve({ request: livestockRequest, solveFor: 'animals.sheep.headcountReductionFraction', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
       expect(failure).toMatchObject({
         kind: 'invalid_request',
@@ -89,11 +89,7 @@ describe('solve', () => {
     })
 
     it('remplace un chemin qui traverse une valeur qui n’est pas un objet', () => {
-      const failure = solve(
-        { id: 'haies', parameters: { hedgeKmCreatedPerYear: '5' } },
-        'hedgeKmCreatedPerYear.x',
-        '1',
-      )._unsafeUnwrapErr()
+      const failure = solve({ request: { id: 'haies', parameters: { hedgeKmCreatedPerYear: '5' } }, solveFor: 'hedgeKmCreatedPerYear.x', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
       expect(failure.kind).toBe('invalid_request')
     })
@@ -103,7 +99,7 @@ describe('solve', () => {
     it('cherche dans la place que laissent les autres paramètres', () => {
       const known = estimate(wasteWith('0.3'))._unsafeUnwrap().reduction
 
-      const solution = solve(wasteRequest, 'storageToIncinerationFraction', known)._unsafeUnwrap()
+      const solution = solve({ request: wasteRequest, solveFor: 'storageToIncinerationFraction', targetReductionTco2e: known })._unsafeUnwrap()
 
       expect(solution.value).toBe('0.3')
       expect(solution.estimate.reduction).toBe(known)
@@ -112,7 +108,7 @@ describe('solve', () => {
     it('renvoie la réduction au maximum admis quand la cible est plus haute', () => {
       const atMaximum = estimate(wasteWith('0.6'))._unsafeUnwrap().reduction
 
-      const failure = solve(wasteRequest, 'storageToIncinerationFraction', '99999999')._unsafeUnwrapErr()
+      const failure = solve({ request: wasteRequest, solveFor: 'storageToIncinerationFraction', targetReductionTco2e: '99999999' })._unsafeUnwrapErr()
 
       expect(failure).toMatchObject({ kind: 'unreachable_target', maxReduction: atMaximum })
     })
@@ -120,28 +116,28 @@ describe('solve', () => {
     it('atteint la réduction du maximum admis', () => {
       const atMaximum = estimate(wasteWith('0.6'))._unsafeUnwrap().reduction
 
-      const solution = solve(wasteRequest, 'storageToIncinerationFraction', atMaximum)._unsafeUnwrap()
+      const solution = solve({ request: wasteRequest, solveFor: 'storageToIncinerationFraction', targetReductionTco2e: atMaximum })._unsafeUnwrap()
 
       expect(solution.value).toBe('0.6')
     })
   })
 
   it('trouve le nombre de kilomètres de haies qui évite une réduction donnée', () => {
-    const solution = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '117')._unsafeUnwrap()
+    const solution = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '117' })._unsafeUnwrap()
 
-    expect(solution.parameter).toBe('hedgeKmCreatedPerYear')
+    expect(solution.solveFor).toBe('hedgeKmCreatedPerYear')
     expect(solution.value).toBe('100')
     expect(solution.estimate.reduction).toBe('117')
   })
 
   it('accepte une cible numérique', () => {
-    const solution = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', 11.7)._unsafeUnwrap()
+    const solution = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: 11.7 })._unsafeUnwrap()
 
     expect(solution.value).toBe('10')
   })
 
   it('trouve une fraction sur un levier territorial et renvoie la valeur la plus courte', () => {
-    const solution = solve(freightRequest, 'roadFreightReductionFraction', '386488.05')._unsafeUnwrap()
+    const solution = solve({ request: freightRequest, solveFor: 'roadFreightReductionFraction', targetReductionTco2e: '386488.05' })._unsafeUnwrap()
 
     expect(solution.value).toBe('0.1')
     expect(solution.estimate.reduction).toBe('386488.05')
@@ -151,65 +147,61 @@ describe('solve', () => {
   it('ignore la valeur déjà saisie pour le paramètre cherché', () => {
     const request = { id: 'haies', parameters: { hedgeKmCreatedPerYear: '999' } }
 
-    expect(solve(request, 'hedgeKmCreatedPerYear', '117')._unsafeUnwrap().value).toBe('100')
+    expect(solve({ request: request, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '117' })._unsafeUnwrap().value).toBe('100')
   })
 
   it('renvoie zéro quand la cible est la réduction de base', () => {
-    const solution = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '0')._unsafeUnwrap()
+    const solution = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '0' })._unsafeUnwrap()
 
     expect(solution.value).toBe('0')
   })
 
   it('refuse une cible au-delà du maximum d’un paramètre borné, et renvoie ce maximum', () => {
-    const failure = solve(freightRequest, 'roadFreightReductionFraction', '99999999')._unsafeUnwrapErr()
+    const failure = solve({ request: freightRequest, solveFor: 'roadFreightReductionFraction', targetReductionTco2e: '99999999' })._unsafeUnwrapErr()
 
     expect(failure).toEqual({
       kind: 'unreachable_target',
-      parameter: 'roadFreightReductionFraction',
+      solveFor: 'roadFreightReductionFraction',
       minReduction: '0',
       maxReduction: '3864880.54',
     })
   })
 
   it('refuse une cible négative', () => {
-    const failure = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '-1')._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '-1' })._unsafeUnwrapErr()
 
     expect(failure).toMatchObject({
       kind: 'invalid_request',
-      issues: [{ parameter: 'targetReduction', code: 'out_of_range' }],
+      issues: [{ parameter: 'targetReductionTco2e', code: 'out_of_range' }],
     })
   })
 
   it('refuse une cible qui n’est ni un texte ni un nombre', () => {
-    const failure = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', {})._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: {} })._unsafeUnwrapErr()
 
     expect(failure).toMatchObject({
       kind: 'invalid_request',
-      issues: [{ parameter: 'targetReduction', code: 'invalid_type' }],
+      issues: [{ parameter: 'targetReductionTco2e', code: 'invalid_type' }],
     })
   })
 
   it('refuse une cible qui n’est pas un décimal', () => {
-    const failure = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', 'beaucoup')._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: 'beaucoup' })._unsafeUnwrapErr()
 
     expect(failure).toMatchObject({
       kind: 'invalid_request',
-      issues: [{ parameter: 'targetReduction', code: 'not_a_decimal' }],
+      issues: [{ parameter: 'targetReductionTco2e', code: 'not_a_decimal' }],
     })
   })
 
   it('refuse un paramètre inconnu du levier', () => {
-    const failure = solve({ id: 'haies', parameters: {} }, 'inconnu', '1')._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'inconnu', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
     expect(failure.kind === 'invalid_request' && failure.issues.map(({ code }) => code)).toContain('unknown_parameter')
   })
 
   it('remonte les paramètres obligatoires manquants du levier', () => {
-    const failure = solve(
-      { id: 'residentiel_sobriete', territory: { level: 'region', code: '84' }, parameters: {} },
-      'householdsApplyingSobrietyFraction',
-      '1',
-    )._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'residentiel_sobriete', territory: { level: 'region', code: '84' }, parameters: {} }, solveFor: 'householdsApplyingSobrietyFraction', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
     expect(failure).toMatchObject({
       kind: 'invalid_request',
@@ -218,13 +210,13 @@ describe('solve', () => {
   })
 
   it('refuse une requête qui n’est pas un objet', () => {
-    const failure = solve('pas une requête', 'x', '1')._unsafeUnwrapErr()
+    const failure = solve({ request: 'pas une requête', solveFor: 'x', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
     expect(failure).toMatchObject({ kind: 'invalid_request' })
   })
 
   it('refuse une requête dont les paramètres ne sont pas un objet', () => {
-    const failure = solve({ id: 'haies', parameters: 'x' }, 'hedgeKmCreatedPerYear', '1')._unsafeUnwrapErr()
+    const failure = solve({ request: { id: 'haies', parameters: 'x' }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '1' })._unsafeUnwrapErr()
 
     expect(failure.kind).toBe('invalid_request')
   })
@@ -232,7 +224,7 @@ describe('solve', () => {
   it('remonte l’erreur de l’estimateur à une valeur de départ', () => {
     const failing = createSolver(() => err({ kind: 'missing_data', dataset: 'd', key: 'k' }))
 
-    expect(failing({ parameters: {} }, 'x', '1')._unsafeUnwrapErr().kind).toBe('missing_data')
+    expect(failing({ request: { parameters: {} }, solveFor: 'x', targetReductionTco2e: '1' })._unsafeUnwrapErr().kind).toBe('missing_data')
   })
 
   describe('avec un estimateur simulé', () => {
@@ -241,24 +233,24 @@ describe('solve', () => {
     it('refuse un paramètre dont la réduction baisse', () => {
       const decreasing = createSolver(fakeEstimate((x) => String(0 - x)))
 
-      expect(decreasing(request, 'x', '5')._unsafeUnwrapErr()).toEqual({
+      expect(decreasing({ request: request, solveFor: 'x', targetReductionTco2e: '5' })._unsafeUnwrapErr()).toEqual({
         kind: 'non_monotonic_parameter',
-        parameter: 'x',
+        solveFor: 'x',
       })
     })
 
     it('cherche au-delà de 1 quand le paramètre n’a pas de borne haute', () => {
       const unbounded = createSolver(fakeEstimate((x) => String(x * 4)))
 
-      expect(unbounded(request, 'x', '40')._unsafeUnwrap().value).toBe('10')
+      expect(unbounded({ request: request, solveFor: 'x', targetReductionTco2e: '40' })._unsafeUnwrap().value).toBe('10')
     })
 
     it('renvoie le maximum quand la réduction plafonne', () => {
       const capped = createSolver(fakeEstimate((x) => String(Math.min(x, 3))))
 
-      expect(capped(request, 'x', '10')._unsafeUnwrapErr()).toEqual({
+      expect(capped({ request: request, solveFor: 'x', targetReductionTco2e: '10' })._unsafeUnwrapErr()).toEqual({
         kind: 'unreachable_target',
-        parameter: 'x',
+        solveFor: 'x',
         minReduction: '0',
         maxReduction: '3',
       })
@@ -272,7 +264,7 @@ describe('solve', () => {
           : ok({ reduction: x } as Estimate)
       })
 
-      expect(failingAboveOne(request, 'x', '5')._unsafeUnwrapErr().kind).toBe('missing_data')
+      expect(failingAboveOne({ request: request, solveFor: 'x', targetReductionTco2e: '5' })._unsafeUnwrapErr().kind).toBe('missing_data')
     })
 
     it('cherche sous la borne qu’impose un autre paramètre', () => {
@@ -286,10 +278,10 @@ describe('solve', () => {
           : ok({ reduction: String(Math.round(Number(x) * 1000) / 100) } as Estimate)
       })
 
-      expect(sharingTheUnit(request, 'x', '5')._unsafeUnwrap().value).toBe('0.5')
-      expect(sharingTheUnit(request, 'x', '7')._unsafeUnwrapErr()).toEqual({
+      expect(sharingTheUnit({ request: request, solveFor: 'x', targetReductionTco2e: '5' })._unsafeUnwrap().value).toBe('0.5')
+      expect(sharingTheUnit({ request: request, solveFor: 'x', targetReductionTco2e: '7' })._unsafeUnwrapErr()).toEqual({
         kind: 'unreachable_target',
-        parameter: 'x',
+        solveFor: 'x',
         minReduction: '0',
         maxReduction: '6',
       })
@@ -298,9 +290,9 @@ describe('solve', () => {
     it('refuse une cible en dessous de la réduction de base', () => {
       const offset = createSolver(fakeEstimate((x) => String(x + 5)))
 
-      expect(offset(request, 'x', '2')._unsafeUnwrapErr()).toEqual({
+      expect(offset({ request: request, solveFor: 'x', targetReductionTco2e: '2' })._unsafeUnwrapErr()).toEqual({
         kind: 'unreachable_target',
-        parameter: 'x',
+        solveFor: 'x',
         minReduction: '5',
         maxReduction: '6',
       })
@@ -309,9 +301,9 @@ describe('solve', () => {
     it('refuse une réduction qui saute la cible', () => {
       const stepped = createSolver(fakeEstimate((x) => (x < 0.5 ? '0' : '10')))
 
-      expect(stepped(request, 'x', '5')._unsafeUnwrapErr()).toEqual({
+      expect(stepped({ request: request, solveFor: 'x', targetReductionTco2e: '5' })._unsafeUnwrapErr()).toEqual({
         kind: 'non_monotonic_parameter',
-        parameter: 'x',
+        solveFor: 'x',
       })
     })
 
@@ -323,13 +315,13 @@ describe('solve', () => {
           : ok({ reduction: (Number(x) * 10).toFixed(2) } as Estimate)
       }
 
-      expect(createSolver(rejectingRoundedValues)(request, 'x', '3.14')._unsafeUnwrap().value).toBe('0.314')
+      expect(createSolver(rejectingRoundedValues)({ request: request, solveFor: 'x', targetReductionTco2e: '3.14' })._unsafeUnwrap().value).toBe('0.314')
     })
 
     it('arrondit la cible comme une réduction', () => {
       const linear = createSolver(fakeEstimate((x) => (x * 2).toFixed(2)))
 
-      expect(linear(request, 'x', '1.005')._unsafeUnwrap().estimate.reduction).toBe('1.01')
+      expect(linear({ request: request, solveFor: 'x', targetReductionTco2e: '1.005' })._unsafeUnwrap().estimate.reduction).toBe('1.01')
     })
   })
 })

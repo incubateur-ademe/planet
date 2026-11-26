@@ -49,12 +49,12 @@ function describeEstimationError(error: SolveError): string {
     )
     .with(
       { kind: 'unreachable_target' },
-      ({ parameter, minReduction, maxReduction }) =>
-        `Objectif inatteignable avec ${parameter} : la réduction possible va de ${minReduction} à ${maxReduction} tCO2e par an.`,
+      ({ solveFor, minReduction, maxReduction }) =>
+        `Objectif inatteignable avec ${solveFor} : la réduction possible va de ${minReduction} à ${maxReduction} tCO2e par an.`,
     )
     .with(
       { kind: 'non_monotonic_parameter' },
-      ({ parameter }) => `La réduction ne varie pas de façon continue et croissante avec ${parameter}.`,
+      ({ solveFor }) => `La réduction ne varie pas de façon continue et croissante avec ${solveFor}.`,
     )
     .exhaustive()
 }

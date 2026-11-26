@@ -31,12 +31,12 @@ describe('describeEstimationError', () => {
     ],
     [
       'unreachable_target',
-      { kind: 'unreachable_target', parameter: 'renovatedParcFraction', minReduction: '0', maxReduction: '5972' },
+      { kind: 'unreachable_target', solveFor: 'renovatedParcFraction', minReduction: '0', maxReduction: '5972' },
       'Objectif inatteignable avec renovatedParcFraction : la réduction possible va de 0 à 5972 tCO2e par an.',
     ],
     [
       'non_monotonic_parameter',
-      { kind: 'non_monotonic_parameter', parameter: 'x' },
+      { kind: 'non_monotonic_parameter', solveFor: 'x' },
       'La réduction ne varie pas de façon continue et croissante avec x.',
     ],
   ])('décrit %s en une phrase française', (_kind, error, expected) => {
