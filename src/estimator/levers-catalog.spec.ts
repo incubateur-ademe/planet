@@ -9,6 +9,14 @@ const entryOf = (id: string): LeverCatalogEntry => {
   return entry
 }
 
+function propertyAt(schema: unknown, path: readonly string[]): unknown {
+  const [name, ...rest] = path
+  if (name === undefined) return schema
+  const properties: unknown = Reflect.get(Object(schema), 'properties')
+  const child: unknown = Reflect.get(Object(properties), name)
+  return child === undefined ? undefined : propertyAt(child, rest)
+}
+
 describe('LEVERS_CATALOG', () => {
   it('liste les 21 leviers du registre, chacun une fois', () => {
     expect(LEVERS_CATALOG.map(({ id }) => id).toSorted()).toEqual(Object.keys(LEVERS).toSorted())
@@ -73,8 +81,25 @@ describe('LEVERS_CATALOG', () => {
       ])
     })
 
-    it('écarte les paramètres imbriqués', () => {
-      expect(entryOf('elevage_durable').solvableParameters).toEqual([])
+    it('liste les feuilles décimales des animaux d’elevage_durable, chemin pointé', () => {
+      const { solvableParameters } = entryOf('elevage_durable')
+
+      expect(solvableParameters).toHaveLength(19)
+      expect(solvableParameters).toContain('animals.dairyCows.headcountReductionFraction')
+      expect(solvableParameters).toContain('animals.sheep.entericEmissionReductionFraction')
+    })
+
+    it('écarte la baisse entérique des volailles, dont le facteur entérique est nul', () => {
+      const { solvableParameters } = entryOf('elevage_durable')
+
+      expect(solvableParameters).toContain('animals.layingHens.headcountReductionFraction')
+      expect(solvableParameters).not.toContain('animals.layingHens.entericEmissionReductionFraction')
+      expect(solvableParameters).not.toContain('animals.broilers.entericEmissionReductionFraction')
+      expect(solvableParameters).not.toContain('animals.otherPoultry.entericEmissionReductionFraction')
+    })
+
+    it('écarte les parts de lisier, qui font 100 % ensemble', () => {
+      expect(entryOf('elevage_durable').solvableParameters.some((path) => path.includes('targetManureShares'))).toBe(false)
     })
 
     it('écarte la durée, la part de ferroviaire, la cyclologistique et les parts cibles dont la réduction baisse', () => {
@@ -94,7 +119,7 @@ describe('LEVERS_CATALOG', () => {
     it('ne liste que des paramètres du schéma du levier', () => {
       for (const { id, solvableParameters, parametersJsonSchema } of LEVERS_CATALOG)
         for (const parameter of solvableParameters)
-          expect(Object.keys(parametersJsonSchema['properties'] ?? {}), id).toContain(parameter)
+          expect(propertyAt(parametersJsonSchema, parameter.split('.')), `${id} ${parameter}`).toBeDefined()
     })
   })
 })

@@ -33,7 +33,72 @@ function wasteWith(storageToIncinerationFraction: string) {
   }
 }
 
+const dairyCows = {
+  headcountReductionFraction: '0',
+  targetManureShares: { liquid: '0.4', solid: '0.2', pasture: '0.4', anaerobicDigestion: '0' },
+}
+
+const livestockRequest = {
+  id: 'elevage_durable',
+  territory: { level: 'region', code: '84' },
+  parameters: { animals: { dairyCows } },
+}
+
+function livestockWith(headcountReductionFraction: string) {
+  return {
+    ...livestockRequest,
+    parameters: { animals: { dairyCows: { ...dairyCows, headcountReductionFraction } } },
+  }
+}
+
 describe('solve', () => {
+  describe('avec un paramètre imbriqué', () => {
+    const path = 'animals.dairyCows.headcountReductionFraction'
+
+    it('cherche la feuille désignée par le chemin', () => {
+      const known = estimate(livestockWith('0.5'))._unsafeUnwrap().reduction
+
+      const solution = solve(livestockRequest, path, known)._unsafeUnwrap()
+
+      expect(solution.parameter).toBe(path)
+      expect(solution.value).toBe('0.5')
+      expect(solution.estimate.reduction).toBe(known)
+    })
+
+    it('cherche une baisse entérique facultative absente de la requête', () => {
+      const withEnteric = {
+        ...livestockRequest,
+        parameters: {
+          animals: { dairyCows: { ...dairyCows, entericEmissionReductionFraction: '0.2' } },
+        },
+      }
+      const known = estimate(withEnteric)._unsafeUnwrap().reduction
+
+      const solution = solve(livestockRequest, 'animals.dairyCows.entericEmissionReductionFraction', known)._unsafeUnwrap()
+
+      expect(solution.value).toBe('0.2')
+    })
+
+    it('remonte l’erreur de l’estimateur quand l’animal n’est pas dans la requête', () => {
+      const failure = solve(livestockRequest, 'animals.sheep.headcountReductionFraction', '1')._unsafeUnwrapErr()
+
+      expect(failure).toMatchObject({
+        kind: 'invalid_request',
+        issues: [{ parameter: 'parameters.animals.sheep.targetManureShares', code: 'required' }],
+      })
+    })
+
+    it('remplace un chemin qui traverse une valeur qui n’est pas un objet', () => {
+      const failure = solve(
+        { id: 'haies', parameters: { hedgeKmCreatedPerYear: '5' } },
+        'hedgeKmCreatedPerYear.x',
+        '1',
+      )._unsafeUnwrapErr()
+
+      expect(failure.kind).toBe('invalid_request')
+    })
+  })
+
   describe('avec des fractions liées', () => {
     it('cherche dans la place que laissent les autres paramètres', () => {
       const known = estimate(wasteWith('0.3'))._unsafeUnwrap().reduction
