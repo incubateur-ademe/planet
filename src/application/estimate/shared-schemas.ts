@@ -96,6 +96,7 @@ const territorySchema = z.strictObject({
 })
 
 export {
+  decimalInputSchema,
   fractionSchema,
   kilometresSchema,
   nonNegativeHectaresPerYearSchema,
