@@ -167,6 +167,23 @@ describe('solve', () => {
     })
   })
 
+  it('conclut qu’une cible est hors d’atteinte en quatre appels pour une fraction', () => {
+    let calls = 0
+    const counting = createSolver((request) => {
+      calls += 1
+      return estimate(request)
+    })
+
+    const failure = counting({
+      request: freightRequest,
+      solveFor: 'roadFreightReductionFraction',
+      targetReductionTco2e: '99999999',
+    })._unsafeUnwrapErr()
+
+    expect(failure.kind).toBe('unreachable_target')
+    expect(calls).toBe(4)
+  })
+
   it('refuse une cible négative', () => {
     const failure = solve({ request: { id: 'haies', parameters: {} }, solveFor: 'hedgeKmCreatedPerYear', targetReductionTco2e: '-1' })._unsafeUnwrapErr()
 

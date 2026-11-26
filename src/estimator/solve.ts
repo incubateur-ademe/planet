@@ -49,6 +49,9 @@ const MAX_BISECTIONS = toBig('100')
 // Source : choix de conception, non validé : 2^-60 sous toute précision utile, le maximum admis d'un paramètre est cherché à cette finesse
 const MAX_VALIDITY_BISECTIONS = toBig('60')
 
+// Source : choix de conception, non validé : 10^-9 de l'écart, la sonde qui conclut que la valeur valide est déjà le maximum admis ; une borne plus proche que cela est confondue avec la valeur valide
+const NEAR_BOUND_RATIO = toBig('0.000000001')
+
 // Source : choix de conception, non validé : milieu d'un intervalle
 const MIDPOINT_RATIO = toBig('0.5')
 
@@ -123,6 +126,21 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
     )
   }
 
+  function largestValueBelow(
+    request: unknown,
+    solveFor: string,
+    valid: Probe,
+    invalidValue: BigNumber,
+  ): Probe {
+    const gap = invalidValue.minus(valid.value)
+    const nearOffset = gap.times(NEAR_BOUND_RATIO)
+    const nearValue = valid.value.plus(nearOffset)
+    return probe(request, solveFor, nearValue).match(
+      (near) => largestValidValue(request, solveFor, near, invalidValue, MAX_VALIDITY_BISECTIONS),
+      () => valid,
+    )
+  }
+
   function probeOrLargestValid(
     request: unknown,
     solveFor: string,
@@ -131,7 +149,7 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
   ): Result<Probe, SolveError> {
     return probe(request, solveFor, value).orElse((error) =>
       isInvalidRequest(error)
-        ? ok(largestValidValue(request, solveFor, valid, value, MAX_VALIDITY_BISECTIONS))
+        ? ok(largestValueBelow(request, solveFor, valid, value))
         : err(error),
     )
   }
