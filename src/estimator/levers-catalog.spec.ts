@@ -60,4 +60,41 @@ describe('LEVERS_CATALOG', () => {
     for (const { id, parametersJsonSchema } of LEVERS_CATALOG)
       expect(parametersJsonSchema['additionalProperties'], id).toBe(false)
   })
+
+  describe('solvableParameters', () => {
+    it('liste le paramètre unique de haies', () => {
+      expect(entryOf('haies').solvableParameters).toEqual(['hedgeKmCreatedPerYear'])
+    })
+
+    it('liste les paramètres décimaux de la sobriété résidentielle', () => {
+      expect(entryOf('residentiel_sobriete').solvableParameters).toEqual([
+        'householdsApplyingSobrietyFraction',
+        'consumptionReductionFraction',
+      ])
+    })
+
+    it('écarte les paramètres imbriqués', () => {
+      expect(entryOf('elevage_durable').solvableParameters).toEqual([])
+    })
+
+    it('écarte la durée, la part de ferroviaire, la cyclologistique et les parts cibles dont la réduction baisse', () => {
+      expect(entryOf('occupation_des_sols').solvableParameters).not.toContain('horizonYears')
+      expect(entryOf('transport_personnes_efficacite').solvableParameters).not.toContain('railShareFraction')
+      expect(entryOf('transport_marchandises_report_modal').solvableParameters).toEqual([
+        'roadToRailFraction',
+        'roadToWaterwayFraction',
+      ])
+      expect(entryOf('residentiel_changement_systeme_chauffage').solvableParameters).toEqual([
+        'targetElectricityShareFraction',
+        'targetWoodShareFraction',
+        'targetHeatNetworkShareFraction',
+      ])
+    })
+
+    it('ne liste que des paramètres du schéma du levier', () => {
+      for (const { id, solvableParameters, parametersJsonSchema } of LEVERS_CATALOG)
+        for (const parameter of solvableParameters)
+          expect(Object.keys(parametersJsonSchema['properties'] ?? {}), id).toContain(parameter)
+    })
+  })
 })
