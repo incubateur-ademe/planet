@@ -27,6 +27,7 @@ export type {
   InvalidDataset,
   MissingData,
 } from './domain/data-source.ts'
+export { levels as LEVELS } from './domain/territory.ts'
 export type { Level } from './domain/territory.ts'
 export type { UnknownTerritory } from './domain/territory-index.ts'
 export { createCsvDataSource } from './infrastructure/csv/csv-data-source.ts'

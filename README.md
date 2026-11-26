@@ -116,6 +116,7 @@ const result = solve({
 - Chaque issue d'un `invalid_request` est `{ parameter, code, message }`. `code` est stable (`ISSUE_CODES` : `not_an_object`, `unknown_lever`, `unknown_parameter`, `required`, `invalid_type`, `not_a_decimal`, `out_of_range`, `invalid_combination`, `invalid_value`) ; `message` est un texte anglais, mélange de messages du paquet et de zod, à ne pas comparer.
 - L'`Estimate` renvoyé est gelé (`Object.freeze`), `limits`, `datasets` et `appliedAssumptions` compris : il se passe tel quel à `JSON.stringify`, sans copie, et une modification lève une `TypeError`. Deux appels ne partagent aucun objet.
 - `describeEstimationError(error)` : une phrase française pour n'importe quelle `EstimationError` ou erreur de `solve`, construite sur le `kind` et les `code` (jamais sur les `message`). Une issue d'`invalid_request` y est décrite par son paramètre et le texte de son code.
+- `LEVELS` : les niveaux de territoire à l'exécution (`departement`, `epci`, `region`), avec le type `Level`. `SolveInput` est le type de l'entrée de `solve`.
 - `ESTIMATION_ERROR_KINDS`, `SOLVE_ERROR_KINDS` et `ESTIMATE_STATUSES` : les valeurs de `EstimationError['kind']`, de `SolveError['kind']` (les précédentes, plus `unreachable_target` et `non_monotonic_parameter`) et de `Estimate['status']`, avec les types `EstimationErrorKind`, `SolveErrorKind` et `EstimateStatus`.
 
 ## Les leviers
