@@ -168,7 +168,7 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
   }
 
   function toSolution(solveFor: string, found: Probe): Solution {
-    return { solveFor, value: found.value.toFixed(), estimate: found.estimate }
+    return Object.freeze({ solveFor, value: found.value.toFixed(), estimate: found.estimate })
   }
 
   function shortestSolution(request: unknown, solveFor: string, found: Probe, target: string): Solution {

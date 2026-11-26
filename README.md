@@ -119,6 +119,19 @@ const result = solve({
 - `LEVELS` : les niveaux de territoire à l'exécution (`departement`, `epci`, `region`), avec le type `Level`. `SolveInput` est le type de l'entrée de `solve`.
 - `ESTIMATION_ERROR_KINDS`, `SOLVE_ERROR_KINDS` et `ESTIMATE_STATUSES` : les valeurs de `EstimationError['kind']`, de `SolveError['kind']` (les précédentes, plus `unreachable_target` et `non_monotonic_parameter`) et de `Estimate['status']`, avec les types `EstimationErrorKind`, `SolveErrorKind` et `EstimateStatus`.
 
+### Schémas JSON
+
+Quatre constantes JSON Schema (brouillon 2020-12, sans `$ref`, gelées) décrivent les entrées et les sorties, pour valider une requête HTTP ou générer une documentation OpenAPI sans dépendre de zod :
+
+- `ESTIMATE_REQUEST_JSON_SCHEMA` : un `oneOf` sur les 21 leviers. `id` est une constante, `territory` est obligatoire ou refusé selon `territoryRequired`, `parameters` est le `parametersJsonSchema` du levier.
+- `SOLVE_REQUEST_JSON_SCHEMA` : la même structure autour de `{ request, solveFor, targetReductionTco2e }`. `solveFor` est limité aux `solvableParameters` du levier, `targetReductionTco2e` est un texte décimal ou un nombre. Les paramètres obligatoires de `request` y sont facultatifs : `solve` contrôle ceux que l'inconnue ne remplace pas.
+- `ESTIMATE_RESPONSE_JSON_SCHEMA` : `reduction` (texte décimal), `status`, `appliedAssumptions`, `limits`, `datasets`.
+- `SOLUTION_JSON_SCHEMA` : `solveFor`, `value` (texte décimal), `estimate`.
+
+Ils sont générés à l'exécution depuis les schémas qui valident la requête et la sortie (`requestSchema`, `LEVERS_CATALOG`, les schémas de réponse) : un levier ajouté s'y trouve sans seconde liste à tenir. Ils décrivent la forme, pas les contrôles croisés (parts de lisier qui font 100 %, niveau non calculé), qui restent à l'exécution. Les tests valident, pour chaque levier du catalogue, une requête acceptée par `estimate`, la sortie réelle de `estimate` et celle de `solve`.
+
+Une `Estimate` et une `Solution` sont des objets simples gelés (`Object.freeze`), faits de textes, tableaux et objets : `JSON.stringify` les sérialise tels quels. zod n'est pas exposé.
+
 ## Les leviers
 
 Le détail d'un levier (formule, constantes sourcées, données, limites, cas de test) est dans son `src/levers/<dossier>/methodology.md`.

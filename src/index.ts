@@ -5,6 +5,12 @@ export { createSolver } from './estimator/solve.ts'
 export type { SolveInput, Solution, Solver } from './estimator/solve.ts'
 export type { Estimate, Estimator, Lever, RequestInput } from './estimator/estimate.ts'
 export { LEVERS_CATALOG } from './estimator/levers-catalog.ts'
+export {
+  ESTIMATE_REQUEST_JSON_SCHEMA,
+  ESTIMATE_RESPONSE_JSON_SCHEMA,
+  SOLUTION_JSON_SCHEMA,
+  SOLVE_REQUEST_JSON_SCHEMA,
+} from './estimator/json-schemas.ts'
 export type { JsonSchema, LeverCatalogEntry } from './estimator/levers-catalog.ts'
 export { ESTIMATE_STATUSES } from './domain/lever-registry.ts'
 export type { ComputedStatus as EstimateStatus, Status } from './domain/lever-registry.ts'
