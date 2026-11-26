@@ -4,8 +4,10 @@ import {
   ESTIMATION_ERROR_KINDS,
   invalidRequest,
   levelNotComputed,
+  SOLVE_ERROR_KINDS,
   type EstimationError,
   type EstimationErrorKind,
+  type SolveError,
 } from './estimation-error.ts'
 
 describe('ESTIMATION_ERROR_KINDS', () => {
@@ -29,6 +31,24 @@ describe('ESTIMATION_ERROR_KINDS', () => {
     expect(ESTIMATION_ERROR_KINDS).toContain(
       levelNotComputed({ lever: 'haies', level: 'region' }).kind,
     )
+  })
+})
+
+describe('SOLVE_ERROR_KINDS', () => {
+  it('ajoute deux kind à ceux d’EstimationError', () => {
+    expect([...SOLVE_ERROR_KINDS].toSorted()).toEqual([
+      'invalid_dataset',
+      'invalid_request',
+      'level_not_computed',
+      'missing_data',
+      'non_monotonic_parameter',
+      'unknown_territory',
+      'unreachable_target',
+    ])
+  })
+
+  it('couvre exactement les kind du type SolveError', () => {
+    expectTypeOf<(typeof SOLVE_ERROR_KINDS)[number]>().toEqualTypeOf<SolveError['kind']>()
   })
 })
 
