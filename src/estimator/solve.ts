@@ -52,6 +52,9 @@ const SHORTEST_VALUE_PLACES_COUNT = 13
 // Source : choix de conception, non validé : les nombres de décimales essayés, de 0 à 12
 const SHORTEST_VALUE_DECIMAL_PLACES = Array.from({ length: SHORTEST_VALUE_PLACES_COUNT }, (_, places) => places)
 
+// Source : choix de conception, non validé : séparateur du chemin d'un paramètre imbriqué, par exemple animals.dairyCows.headcountReductionFraction
+const PATH_SEPARATOR = '.'
+
 // Source : choix de conception, non validé : nom du paramètre d'objectif dans les issues d'une requête invalide
 const TARGET_PARAMETER = 'targetReduction'
 
@@ -59,9 +62,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function setAt(node: unknown, keys: readonly string[], value: string): unknown {
+  const [key, ...rest] = keys
+  if (key === undefined) return value
+  const record = isRecord(node) ? node : {}
+  return { ...record, [key]: setAt(record[key], rest, value) }
+}
+
 function withParameter(request: unknown, parameter: string, value: BigNumber): unknown {
   if (!isRecord(request) || !isRecord(request.parameters)) return request
-  return { ...request, parameters: { ...request.parameters, [parameter]: value.toFixed() } }
+  return { ...request, parameters: setAt(request.parameters, parameter.split(PATH_SEPARATOR), value.toFixed()) }
 }
 
 function invalidTarget(code: InvalidRequestIssueCode, message: string): SolveError {
