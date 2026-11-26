@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern'
 import type { Level } from '../../domain/territory.ts'
-import type { EstimationError, InvalidRequest, InvalidRequestIssueCode } from './estimation-error.ts'
+import type { InvalidRequest, InvalidRequestIssueCode, SolveError } from './estimation-error.ts'
 
 // Source : choix de conception, non validé : texte français de chaque code d'issue, destiné à l'utilisateur d'un service qui expose le paquet
 const ISSUE_DESCRIPTIONS: Readonly<Record<InvalidRequestIssueCode, string>> = {
@@ -28,7 +28,7 @@ function describeIssues(issues: InvalidRequest['issues']): string {
   return `Requête invalide : ${described.join(' ; ')}.`
 }
 
-function describeEstimationError(error: EstimationError): string {
+function describeEstimationError(error: SolveError): string {
   return match(error)
     .with({ kind: 'invalid_request' }, ({ issues }) => describeIssues(issues))
     .with(
@@ -46,6 +46,15 @@ function describeEstimationError(error: EstimationError): string {
     .with(
       { kind: 'invalid_dataset' },
       ({ dataset, reason, detail }) => `Jeu de données ${dataset} invalide : ${reason} (${detail}).`,
+    )
+    .with(
+      { kind: 'unreachable_target' },
+      ({ parameter, minReduction, maxReduction }) =>
+        `Objectif inatteignable avec ${parameter} : la réduction possible va de ${minReduction} à ${maxReduction} tCO2e par an.`,
+    )
+    .with(
+      { kind: 'non_monotonic_parameter' },
+      ({ parameter }) => `La réduction ne varie pas de façon continue et croissante avec ${parameter}.`,
     )
     .exhaustive()
 }

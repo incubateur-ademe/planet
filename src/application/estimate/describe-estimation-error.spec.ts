@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { ISSUE_CODES, type EstimationError } from './estimation-error.ts'
+import { ISSUE_CODES, type SolveError } from './estimation-error.ts'
 import { describeEstimationError } from './describe-estimation-error.ts'
 
 describe('describeEstimationError', () => {
-  it.each<[string, EstimationError, string]>([
+  it.each<[string, SolveError, string]>([
     [
       'level_not_computed',
       { kind: 'level_not_computed', lever: 'transport_marchandises_report_modal', level: 'departement' },
@@ -28,6 +28,16 @@ describe('describeEstimationError', () => {
         detail: 'expected a, got b',
       },
       'Jeu de données transport-marchandises/regions invalide : checksum_mismatch (expected a, got b).',
+    ],
+    [
+      'unreachable_target',
+      { kind: 'unreachable_target', parameter: 'renovatedParcFraction', minReduction: '0', maxReduction: '5972' },
+      'Objectif inatteignable avec renovatedParcFraction : la réduction possible va de 0 à 5972 tCO2e par an.',
+    ],
+    [
+      'non_monotonic_parameter',
+      { kind: 'non_monotonic_parameter', parameter: 'x' },
+      'La réduction ne varie pas de façon continue et croissante avec x.',
     ],
   ])('décrit %s en une phrase française', (_kind, error, expected) => {
     expect(describeEstimationError(error)).toBe(expected)
