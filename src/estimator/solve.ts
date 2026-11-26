@@ -10,12 +10,18 @@ import type { EstimateUntrustedRequest } from '../create-default-estimator.ts'
 import type { Estimate } from './estimate.ts'
 
 type Solution = {
-  readonly parameter: string
+  readonly solveFor: string
   readonly value: string
   readonly estimate: Estimate
 }
 
-type Solver = (request: unknown, parameter: string, targetReduction: unknown) => Result<Solution, SolveError>
+type SolveInput = {
+  readonly request: unknown
+  readonly solveFor: string
+  readonly targetReductionTco2e: unknown
+}
+
+type Solver = (input: SolveInput) => Result<Solution, SolveError>
 
 type Probe = {
   readonly value: BigNumber
@@ -56,7 +62,7 @@ const SHORTEST_VALUE_DECIMAL_PLACES = Array.from({ length: SHORTEST_VALUE_PLACES
 const PATH_SEPARATOR = '.'
 
 // Source : choix de conception, non validé : nom du paramètre d'objectif dans les issues d'une requête invalide
-const TARGET_PARAMETER = 'targetReduction'
+const TARGET_PARAMETER = 'targetReductionTco2e'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -69,17 +75,17 @@ function setAt(node: unknown, keys: readonly string[], value: string): unknown {
   return { ...record, [key]: setAt(record[key], rest, value) }
 }
 
-function withParameter(request: unknown, parameter: string, value: BigNumber): unknown {
+function withParameter(request: unknown, solveFor: string, value: BigNumber): unknown {
   if (!isRecord(request) || !isRecord(request.parameters)) return request
-  return { ...request, parameters: setAt(request.parameters, parameter.split(PATH_SEPARATOR), value.toFixed()) }
+  return { ...request, parameters: setAt(request.parameters, solveFor.split(PATH_SEPARATOR), value.toFixed()) }
 }
 
 function invalidTarget(code: InvalidRequestIssueCode, message: string): SolveError {
   return invalidRequest([{ parameter: TARGET_PARAMETER, code, message }])
 }
 
-function parseTarget(targetReduction: unknown): Result<string, SolveError> {
-  const text = typeof targetReduction === 'number' ? numberToDecimalText(targetReduction) : targetReduction
+function parseTarget(targetReductionTco2e: unknown): Result<string, SolveError> {
+  const text = typeof targetReductionTco2e === 'number' ? numberToDecimalText(targetReductionTco2e) : targetReductionTco2e
   if (typeof text !== 'string') return err(invalidTarget('invalid_type', 'must be a decimal number'))
   if (!decimalTextPattern.test(text)) return err(invalidTarget('not_a_decimal', 'must be a decimal number'))
   const target = roundOutput(toBig(text))
@@ -92,8 +98,8 @@ function isInvalidRequest(error: SolveError): boolean {
 }
 
 function createSolver(estimate: EstimateUntrustedRequest): Solver {
-  function probe(request: unknown, parameter: string, value: BigNumber): Result<Probe, SolveError> {
-    return estimate(withParameter(request, parameter, value)).map((result) => ({
+  function probe(request: unknown, solveFor: string, value: BigNumber): Result<Probe, SolveError> {
+    return estimate(withParameter(request, solveFor, value)).map((result) => ({
       value,
       estimate: result,
       reduction: toBig(result.reduction),
@@ -102,7 +108,7 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
 
   function largestValidValue(
     request: unknown,
-    parameter: string,
+    solveFor: string,
     valid: Probe,
     invalidValue: BigNumber,
     remaining: BigNumber,
@@ -111,98 +117,98 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
     const sumOfBounds = valid.value.plus(invalidValue)
     const middle = sumOfBounds.times(MIDPOINT_RATIO)
     const nextRemaining = remaining.minus(FIRST_UPPER_VALUE)
-    return probe(request, parameter, middle).match(
-      (found) => largestValidValue(request, parameter, found, invalidValue, nextRemaining),
-      () => largestValidValue(request, parameter, valid, middle, nextRemaining),
+    return probe(request, solveFor, middle).match(
+      (found) => largestValidValue(request, solveFor, found, invalidValue, nextRemaining),
+      () => largestValidValue(request, solveFor, valid, middle, nextRemaining),
     )
   }
 
   function probeOrLargestValid(
     request: unknown,
-    parameter: string,
+    solveFor: string,
     valid: Probe,
     value: BigNumber,
   ): Result<Probe, SolveError> {
-    return probe(request, parameter, value).orElse((error) =>
+    return probe(request, solveFor, value).orElse((error) =>
       isInvalidRequest(error)
-        ? ok(largestValidValue(request, parameter, valid, value, MAX_VALIDITY_BISECTIONS))
+        ? ok(largestValidValue(request, solveFor, valid, value, MAX_VALIDITY_BISECTIONS))
         : err(error),
     )
   }
 
-  function unreachable(parameter: string, lowest: Probe, highest: Probe): SolveError {
+  function unreachable(solveFor: string, lowest: Probe, highest: Probe): SolveError {
     return {
       kind: 'unreachable_target',
-      parameter,
+      solveFor,
       minReduction: lowest.estimate.reduction,
       maxReduction: highest.estimate.reduction,
     }
   }
 
-  function nonMonotonic(parameter: string): SolveError {
-    return { kind: 'non_monotonic_parameter', parameter }
+  function nonMonotonic(solveFor: string): SolveError {
+    return { kind: 'non_monotonic_parameter', solveFor }
   }
 
-  function toSolution(parameter: string, found: Probe): Solution {
-    return { parameter, value: found.value.toFixed(), estimate: found.estimate }
+  function toSolution(solveFor: string, found: Probe): Solution {
+    return { solveFor, value: found.value.toFixed(), estimate: found.estimate }
   }
 
-  function shortestSolution(request: unknown, parameter: string, found: Probe, target: string): Solution {
+  function shortestSolution(request: unknown, solveFor: string, found: Probe, target: string): Solution {
     const matching = SHORTEST_VALUE_DECIMAL_PLACES.flatMap((places) =>
-      probe(request, parameter, found.value.decimalPlaces(places)).match(
+      probe(request, solveFor, found.value.decimalPlaces(places)).match(
         (candidate) => (candidate.estimate.reduction === target ? [candidate] : []),
         () => [],
       ),
     )
-    return toSolution(parameter, matching.reduce<Probe>((shortest, candidate) => (shortest === found ? candidate : shortest), found))
+    return toSolution(solveFor, matching.reduce<Probe>((shortest, candidate) => (shortest === found ? candidate : shortest), found))
   }
 
   function bisect(
     request: unknown,
-    parameter: string,
+    solveFor: string,
     { low, high }: Bracket,
     target: string,
     remaining: BigNumber,
   ): Result<Solution, SolveError> {
-    if (remaining.isZero()) return err(nonMonotonic(parameter))
+    if (remaining.isZero()) return err(nonMonotonic(solveFor))
     const sumOfBounds = low.value.plus(high.value)
     const middle = sumOfBounds.times(MIDPOINT_RATIO)
-    return probe(request, parameter, middle).andThen((found) => {
-      if (found.estimate.reduction === target) return ok(shortestSolution(request, parameter, found, target))
+    return probe(request, solveFor, middle).andThen((found) => {
+      if (found.estimate.reduction === target) return ok(shortestSolution(request, solveFor, found, target))
       const next = found.reduction.isLessThan(target)
         ? { low: found, high }
         : { low, high: found }
-      return bisect(request, parameter, next, target, remaining.minus(FIRST_UPPER_VALUE))
+      return bisect(request, solveFor, next, target, remaining.minus(FIRST_UPPER_VALUE))
     })
   }
 
   function raiseUpperBound(
     request: unknown,
-    parameter: string,
+    solveFor: string,
     base: Probe,
     { low, high }: Bracket,
     target: string,
     remaining: BigNumber,
   ): Result<Bracket, SolveError> {
     if (high.reduction.isGreaterThanOrEqualTo(target)) return ok({ low, high })
-    if (remaining.isZero()) return err(unreachable(parameter, base, high))
+    if (remaining.isZero()) return err(unreachable(solveFor, base, high))
     const nextValue = high.value.times(UPPER_VALUE_GROWTH)
-    return probeOrLargestValid(request, parameter, high, nextValue).andThen((next) =>
+    return probeOrLargestValid(request, solveFor, high, nextValue).andThen((next) =>
       next.value.isEqualTo(high.value)
-        ? err(unreachable(parameter, base, high))
-        : raiseUpperBound(request, parameter, base, { low: high, high: next }, target, remaining.minus(FIRST_UPPER_VALUE)),
+        ? err(unreachable(solveFor, base, high))
+        : raiseUpperBound(request, solveFor, base, { low: high, high: next }, target, remaining.minus(FIRST_UPPER_VALUE)),
     )
   }
 
-  return (request, parameter, targetReduction) =>
-    parseTarget(targetReduction).andThen((target) =>
-      probe(request, parameter, BASE_VALUE).andThen((base) =>
-        probeOrLargestValid(request, parameter, base, FIRST_UPPER_VALUE).andThen((first) => {
-          if (first.reduction.isLessThan(base.reduction)) return err(nonMonotonic(parameter))
-          if (base.estimate.reduction === target) return ok(toSolution(parameter, base))
-          if (base.reduction.isGreaterThan(target)) return err(unreachable(parameter, base, first))
-          return raiseUpperBound(request, parameter, base, { low: base, high: first }, target, MAX_UPPER_VALUE_DOUBLINGS).andThen(
-            (bracket) => bisect(request, parameter, bracket, target, MAX_BISECTIONS),
+  return ({ request, solveFor, targetReductionTco2e }) =>
+    parseTarget(targetReductionTco2e).andThen((target) =>
+      probe(request, solveFor, BASE_VALUE).andThen((base) =>
+        probeOrLargestValid(request, solveFor, base, FIRST_UPPER_VALUE).andThen((first) => {
+          if (first.reduction.isLessThan(base.reduction)) return err(nonMonotonic(solveFor))
+          if (base.estimate.reduction === target) return ok(toSolution(solveFor, base))
+          if (base.reduction.isGreaterThan(target)) return err(unreachable(solveFor, base, first))
+          return raiseUpperBound(request, solveFor, base, { low: base, high: first }, target, MAX_UPPER_VALUE_DOUBLINGS).andThen(
+            (bracket) => bisect(request, solveFor, bracket, target, MAX_BISECTIONS),
           )
         }),
       ),
@@ -210,4 +216,4 @@ function createSolver(estimate: EstimateUntrustedRequest): Solver {
 }
 
 export { createSolver }
-export type { Solution, Solver }
+export type { SolveInput, Solution, Solver }

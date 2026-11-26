@@ -37,14 +37,14 @@ type EstimationError = InvalidRequest | LevelNotComputed | UnknownTerritory | Da
 
 type UnreachableTarget = {
   readonly kind: 'unreachable_target'
-  readonly parameter: string
+  readonly solveFor: string
   readonly minReduction: string
   readonly maxReduction: string
 }
 
 type NonMonotonicParameter = {
   readonly kind: 'non_monotonic_parameter'
-  readonly parameter: string
+  readonly solveFor: string
 }
 
 type SolveError = EstimationError | UnreachableTarget | NonMonotonicParameter
