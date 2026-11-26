@@ -73,6 +73,24 @@ const result = estimate({ id: 'haies', parameters: { hedgeKmCreatedPerYear: 'abc
 
 `result.error` vaut `{ kind: 'invalid_request', issues: [{ parameter: 'parameters.hedgeKmCreatedPerYear', message: 'must be a decimal number' }] }`.
 
+### Trouver la valeur d'un paramètre
+
+```ts
+import { createDefaultEstimator, createSolver } from '@incubateur-ademe/planet'
+
+const solve = createSolver(createDefaultEstimator())
+
+const result = solve({ id: 'haies', parameters: {} }, 'hedgeKmCreatedPerYear', '117')
+```
+
+`solve(request, parameter, targetReduction)` cherche la valeur de `parameter` qui évite `targetReduction` tCO2e par an, les autres paramètres de la requête restant fixés. `result.value.value` vaut `'100'` et `result.value.estimate` est l'`Estimate` à cette valeur : sa `reduction` est la cible, arrondie à deux décimales. La valeur renvoyée est la plus courte (jusqu'à douze décimales) qui redonne la cible. La valeur déjà saisie pour `parameter` est ignorée.
+
+- Les paramètres cherchables d'un levier sont `solvableParameters` dans `LEVERS_CATALOG`. Les paramètres imbriqués (`elevage_durable`) et ceux dont la réduction baisse quand ils augmentent n'y sont pas.
+- Une cible hors d'atteinte donne `{ kind: 'unreachable_target', parameter, minReduction, maxReduction }` : `minReduction` est la réduction à 0, `maxReduction` la plus haute atteinte, au maximum du paramètre (1 pour une fraction). Si les autres paramètres ne laissent pas la place à 1 (fractions liées d'un report modal ou des déchets), la requête échoue en `invalid_request` (`invalid_combination`).
+- Une réduction qui baisse avec le paramètre, ou qui saute la cible, donne `{ kind: 'non_monotonic_parameter', parameter }`. La croissance n'est vérifiée qu'entre 0 et 1.
+- Une cible négative, qui n'est pas un décimal ou qui n'est ni un texte ni un nombre est une `invalid_request` dont l'issue porte `targetReduction`.
+- `solve` rappelle `estimate` jusqu'à 200 fois : à réserver à un affichage ou à une recherche ponctuelle, pas à une boucle sur tous les territoires.
+
 ## Règles de la requête
 
 - `id` : l'identifiant du levier. `territory` : `{ level: 'region' | 'departement' | 'epci', code }`, absent pour `haies` et `pratiques_stockantes`.
@@ -84,11 +102,11 @@ const result = estimate({ id: 'haies', parameters: { hedgeKmCreatedPerYear: 'abc
 
 ## Catalogue, constantes et types
 
-- `LEVERS_CATALOG` : un élément par levier, `{ id, territoryRequired, levels, parametersJsonSchema }`. `levels` donne le statut de chaque niveau (`no_open_question`, `workaround` ou `not_computed`). `parametersJsonSchema` est le JSON Schema (brouillon 2020-12) des paramètres tel que l'accepte l'estimateur : un décimal est un texte au motif `^-?\d+(\.\d+)?$` ou un nombre, et la description du paramètre donne sa borne ; les bornes que le calcul contrôle ne sont pas dans le schéma.
+- `LEVERS_CATALOG` : un élément par levier, `{ id, territoryRequired, levels, parametersJsonSchema, solvableParameters }`. `levels` donne le statut de chaque niveau (`no_open_question`, `workaround` ou `not_computed`). `parametersJsonSchema` est le JSON Schema (brouillon 2020-12) des paramètres tel que l'accepte l'estimateur : un décimal est un texte au motif `^-?\d+(\.\d+)?$` ou un nombre, et la description du paramètre donne sa borne ; les bornes que le calcul contrôle ne sont pas dans le schéma. `solvableParameters` liste les paramètres que `solve` peut chercher.
 - Chaque issue d'un `invalid_request` est `{ parameter, code, message }`. `code` est stable (`ISSUE_CODES` : `not_an_object`, `unknown_lever`, `unknown_parameter`, `required`, `invalid_type`, `not_a_decimal`, `out_of_range`, `invalid_combination`, `invalid_value`) ; `message` est un texte anglais, mélange de messages du paquet et de zod, à ne pas comparer.
 - L'`Estimate` renvoyé est gelé (`Object.freeze`), `limits`, `datasets` et `appliedAssumptions` compris : il se passe tel quel à `JSON.stringify`, sans copie, et une modification lève une `TypeError`. Deux appels ne partagent aucun objet.
-- `describeEstimationError(error)` : une phrase française pour n'importe quelle `EstimationError`, construite sur le `kind` et les `code` (jamais sur les `message`). Une issue d'`invalid_request` y est décrite par son paramètre et le texte de son code.
-- `ESTIMATION_ERROR_KINDS` et `ESTIMATE_STATUSES` : les valeurs de `EstimationError['kind']` et de `Estimate['status']`, avec les types `EstimationErrorKind` et `EstimateStatus`.
+- `describeEstimationError(error)` : une phrase française pour n'importe quelle `EstimationError` ou erreur de `solve`, construite sur le `kind` et les `code` (jamais sur les `message`). Une issue d'`invalid_request` y est décrite par son paramètre et le texte de son code.
+- `ESTIMATION_ERROR_KINDS`, `SOLVE_ERROR_KINDS` et `ESTIMATE_STATUSES` : les valeurs de `EstimationError['kind']`, de `SolveError['kind']` (les précédentes, plus `unreachable_target` et `non_monotonic_parameter`) et de `Estimate['status']`, avec les types `EstimationErrorKind`, `SolveErrorKind` et `EstimateStatus`.
 
 ## Les leviers
 
